@@ -10,6 +10,7 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.2.1",
     "multer": "^2.0.2",
+    "node-cache": "^5.1.2",
     "node-fetch": "^3.3.2",
     "nodemailer": "^8.0.1",
     "rate-limit-redis": "^4.3.1",

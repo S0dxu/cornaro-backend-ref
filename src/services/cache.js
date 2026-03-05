@@ -1,4 +1,6 @@
 const redis = require("../config/redis");
+const NodeCache = require("node-cache");
+const myCache = new NodeCache({ stdTTL: 600, checkperiod: 120 });
 
 async function getCache(key) {
   const data = await redis.get(key);

@@ -194,29 +194,41 @@ router.post("/add-books", verifyUser, postLimiterUser, async (req, res) => {
 router.post("/books/like", verifyUser, postLimiterUser, async (req, res) => {
   const { bookId } = req.body;
   const userEmail = req.user.schoolEmail;
+
   if (!bookId) return res.status(400).json({ message: "bookId mancante" });
+
+  if (!mongoose.Types.ObjectId.isValid(bookId)) {
+    return res.status(400).json({ message: "bookId non valido" });
+  }
 
   try {
     const liked = await Book.findOneAndUpdate(
       { _id: bookId, likedBy: { $ne: userEmail } },
       { $addToSet: { likedBy: userEmail }, $inc: { likes: 1 } },
-      { new: true }
+      { new: true, useFindAndModify: false }
     );
 
-    if (!liked) {
-      const unliked = await Book.findOneAndUpdate(
-        { _id: bookId, likedBy: userEmail },
-        { $pull: { likedBy: userEmail }, $inc: { likes: -1 } },
-        { new: true }
-      );
+    if (liked) {
+      liked.likes = liked.likes || 0;
       clearBookCache();
-      return res.json({ liked: false, likes: unliked.likes });
+      return res.json({ liked: true, likes: liked.likes });
     }
 
+    const unliked = await Book.findOneAndUpdate(
+      { _id: bookId, likedBy: userEmail },
+      { $pull: { likedBy: userEmail }, $inc: { likes: -1 } },
+      { new: true, useFindAndModify: false }
+    );
+
+    if (!unliked) return res.status(404).json({ message: "Libro non trovato" });
+
+    unliked.likes = unliked.likes || 0;
     clearBookCache();
-    res.json({ liked: true, likes: liked.likes });
+    return res.json({ liked: false, likes: unliked.likes });
+
   } catch (e) {
-    res.status(500).json({ message: "Errore server" });
+    console.error("Errore like:", e);
+    res.status(500).json({ message: "Errore server durante il like" });
   }
 });
 
