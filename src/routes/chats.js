@@ -158,7 +158,7 @@ router.post("/chats/:chatId/messages", verifyUser, postLimiterUser, verifyChatAc
   res.status(201).json(msg);
 });
 
-router.post("/upload-test", upload.single("image"), async (req, res) => {
+router.post("/upload-imgur", upload.single("image"), async (req, res) => {
   const fetch = (await import("node-fetch")).default;
 
   const base64Image = req.file.buffer.toString("base64");
