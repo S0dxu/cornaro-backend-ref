@@ -133,15 +133,43 @@ router.get("/get-favorite-books", verifyUser, postLimiterUser, async (req, res) 
 
 router.post("/add-books", verifyUser, postLimiterUser, async (req, res) => {
   const { title, condition, price, subject, grade, images, description, isbn } = req.body;
-  if (!title || !condition || !price || !subject || !grade || !images)
+
+  if (
+    title == null ||
+    condition == null ||
+    price == null ||
+    subject == null ||
+    grade == null ||
+    images == null
+  ) {
     return res.status(400).json({ message: "Campi obbligatori mancanti" });
-  if (!Array.isArray(images) || images.length === 0)
+  }
+
+  if (
+    typeof title !== "string" ||
+    typeof condition !== "string" ||
+    typeof subject !== "string" ||
+    typeof grade !== "string"
+  ) {
+    return res.status(400).json({ message: "Formato campi non valido" });
+  }
+
+  if (typeof price !== "number" || isNaN(price)) {
+    return res.status(400).json({ message: "Prezzo non valido" });
+  }
+
+  if (!Array.isArray(images) || images.length === 0) {
     return res.status(400).json({ message: "Immagini non valide" });
+  }
 
   try {
     for (const imgUrl of images) {
+      if (typeof imgUrl !== "string" || imgUrl.trim() === "") {
+        return res.status(400).json({ message: "URL immagine non valido" });
+      }
+
       const nudityCheck = await checkNudity(imgUrl);
-      if (nudityCheck.nsfw || nudityCheck.nudity) {
+      if (nudityCheck?.nsfw || nudityCheck?.nudity) {
         return res.status(400).json({ message: "Immagini non consentite" });
       }
     }
@@ -158,36 +186,49 @@ router.post("/add-books", verifyUser, postLimiterUser, async (req, res) => {
           { $inc: { credits: -10 } },
           { session, new: true }
         );
+
         if (!updatedUser) throw new Error("Crediti insufficienti");
       }
 
-      const [newBook] = await Book.create([{
-        title,
-        condition,
-        price,
-        subject,
-        grade,
-        images,
-        description: description || "",
-        isbn: isbn || "",
-        createdBy: req.user.schoolEmail
-      }], { session });
+      const [newBook] = await Book.create(
+        [
+          {
+            title: title.trim(),
+            condition: condition.trim(),
+            price,
+            subject: subject.trim(),
+            grade: grade.trim(),
+            images,
+            description: typeof description === "string" ? description.trim() : "",
+            isbn: typeof isbn === "string" ? isbn.trim() : "",
+            createdBy: req.user.schoolEmail
+          }
+        ],
+        { session }
+      );
 
       await session.commitTransaction();
       session.endSession();
+
       clearBookCache();
+
       return res.status(201).json({
         message: "Libro pubblicato",
         creditsLeft: CREDITS_ENABLED ? updatedUser.credits : null,
         book: newBook
       });
+
     } catch (error) {
       await session.abortTransaction();
       session.endSession();
-      return res.status(error.message === "Crediti insufficienti" ? 403 : 400).json({ message: error.message });
+
+      return res
+        .status(error.message === "Forbitten" ? 403 : 400)
+        .json({ message: error.message });
     }
+
   } catch (e) {
-    res.status(500).json({ message: "Errore interno del server" });
+    return res.status(500).json({ message: "Errore interno del server" });
   }
 });
 
