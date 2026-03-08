@@ -159,25 +159,45 @@ router.post("/chats/:chatId/messages", verifyUser, postLimiterUser, verifyChatAc
 });
 
 router.post("/upload-imgur", upload.single("image"), async (req, res) => {
-  const fetch = (await import("node-fetch")).default;
+  if (!req.file)
+    return res.status(400).json({ message: "File mancante" });
 
-  const base64Image = req.file.buffer.toString("base64");
+  try {
+    const fetch = (await import("node-fetch")).default;
+    const base64Image = req.file.buffer.toString("base64");
 
-  const r = await fetch("https://api.imgur.com/3/upload", {
-    method: "POST",
-    headers: {
-      Authorization: `Client-ID ${process.env.IMGUR_CLIENT_ID}`,
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams({
-      image: base64Image,
-      type: "base64"
-    })
-  });
+    const imgbbResponse = await fetch(
+      `https://api.imgbb.com/1/upload?key=a116bcc0453088248b3201f5cee3a643`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          image: base64Image,
+          name: req.file.originalname.replace(/\.[^/.]+$/, ""),
+        }),
+      }
+    );
 
-  const data = await r.json();
-  console.log(data);
-  res.json(data);
+    const imgbbData = await imgbbResponse.json();
+
+    if (!imgbbData.success)
+      return res.status(500).json({ message: "Errore caricamento ImgBB" });
+
+    const imageUrl = imgbbData.data.url;
+
+    const nsfwResult = await checkNudity(imageUrl);
+    if (nsfwResult.nsfw || nsfwResult.nudity) {
+      return res.status(400).json({ message: "L'immagine non è consentita" });
+    }
+
+    res.json({
+      link: imageUrl,
+      display_url: imgbbData.data.display_url,
+    });
+
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 
 module.exports = router;
