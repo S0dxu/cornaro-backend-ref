@@ -19,14 +19,30 @@ async function sendEmail(to, subject, html) {
   });
 }
 
-async function sendEmailViaBridge({ to, subject, text, html }) {
+const ipCooldown = new Map();
+const TEN_MINUTES = 10 * 60 * 1000;
+
+async function sendEmailViaBridge({ to, subject, text, html, ip }) {
+  const now = Date.now();
+
+  const lastSend = ipCooldown.get(ip);
+  if (lastSend && now - lastSend < TEN_MINUTES) {
+    throw new Error("Troppi invii da questo IP. Attendi 10 minuti.");
+  }
+
   const fetch = (await import("node-fetch")).default;
+
   const res = await fetch(process.env.EMAIL_BRIDGE_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.EMAIL_BRIDGE_SECRET}` },
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${process.env.EMAIL_BRIDGE_SECRET}`
+    },
     body: JSON.stringify({ to, subject, text, html })
   });
-  if (!res.ok) throw new Error("Errore invio email via bridge");
-}
 
+  if (!res.ok) throw new Error("Errore invio email via bridge");
+
+  ipCooldown.set(ip, now);
+}
 module.exports = { sendEmail, sendEmailViaBridge };

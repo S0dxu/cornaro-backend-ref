@@ -75,4 +75,12 @@ const postLimiterUser = rateLimit({
   message: { message: "Troppi richieste, riprova più tardi" },
 });
 
-module.exports = { verifyUser, verifyAdmin, postLimiterUser, verifyChatAccess, postLimiterIP };
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.socket.remoteAddress;
+}
+
+module.exports = { verifyUser, verifyAdmin, postLimiterUser, verifyChatAccess, postLimiterIP, getClientIp };

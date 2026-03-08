@@ -1,5 +1,5 @@
 const express = require("express");
-const { postLimiterIP, verifyAdmin } = require("../middlewares/auth");
+const { postLimiterIP, verifyAdmin, getClientIp } = require("../middlewares/auth");
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -12,11 +12,18 @@ const emailCooldown = new Map();
 const failedAttempts = new Map();
 const { decrypt } = require("../services/encryption");
 
-function generateCode(){ const chars="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"; let c=""; for(let i=0;i<6;i++) c+=chars[Math.floor(Math.random()*chars.length)]; return c; }
-function isValidSchoolEmail(email){ email=email.normalize("NFKC").replace(/[^\x00-\x7F]/g,"").toLowerCase().trim(); if(/[\r\n]/.test(email)) return false; return /^[^@]+@studenti\.liceocornaro\.edu\.it$/.test(email); }
+function generateCode(){ const chars="0123456789"; let c=""; for(let i=0;i<6;i++) c+=chars[Math.floor(Math.random()*chars.length)]; return c; }
+
+function isValidSchoolEmail(email) {
+  if (typeof email !== "string") return false;
+  email = email.normalize("NFKC").replace(/[^\x00-\x7F]/g, "").toLowerCase().trim();
+  if (/[\r\n]/.test(email)) return false;
+  return /^[^@]+@studenti\.liceocornaro\.edu\.it$/.test(email);
+}
 
 router.post("/register/request", postLimiterIP, async (req,res)=>{
   const { schoolEmail } = req.body;
+  const ip = getClientIp(req);
   if(!schoolEmail) return res.status(400).json({ message: "Email richiesta" });
   if(!isValidSchoolEmail(schoolEmail)) return res.status(400).json({ message: "Email non valida" });
   const existingUser = await User.findOne({ schoolEmail });
@@ -28,23 +35,30 @@ router.post("/register/request", postLimiterIP, async (req,res)=>{
   if(emailCooldown.has(schoolEmail) && now-emailCooldown.get(schoolEmail)<60000) return res.status(429).json({ message: "Attendi 60 secondi" });
   const code = generateCode();
   const expiresAt = new Date(now+10*60000);
-  try{ 
-    await sendEmailViaBridge({
-      to: schoolEmail,
-      subject: "Codice di verifica App Cornaro",
-      html: `
-        <div style="font-family: Arial, sans-serif; background-color: #f6f6f6; padding: 30px;">
-          <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
-            <p>Per completare la registrazione, inserisci il codice di verifica qui sotto:</p>
-            <div style="text-align: center; margin: 20px 0; padding: 15px; background-color: #f0f0f0; border-radius: 6px; font-size: 24px; font-weight: bold; letter-spacing: 2px;">
-              ${code}
+    try { 
+      await sendEmailViaBridge({
+        to: schoolEmail,
+        subject: "Codice di verifica App Cornaro",
+        html: `
+          <div style="font-family: Arial, sans-serif; background-color: #f6f6f6; padding: 30px;">
+            <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+              <p>Per completare la registrazione, inserisci il codice di verifica qui sotto:</p>
+              <div style="text-align: center; margin: 20px 0; padding: 15px; background-color: #f0f0f0; border-radius: 6px; font-size: 24px; font-weight: bold; letter-spacing: 2px;">
+                ${code}
+              </div>
+              <p>Non condividere questo codice con nessuno. Se non hai richiesto questo codice, puoi ignorare questa email.</p>
             </div>
-            <p>Non condividere questo codice con nessuno. Se non hai richiesto questo codice, puoi ignorare questa email.</p>
           </div>
-        </div>
-      `
-    });
-   } catch(e){ return res.status(400).json({ message:"Email inesistente o problema nell'invio" }); }
+        `,
+        ip
+      });
+    } catch(e) { 
+      if (e.message && e.message.includes("IP")) {
+        return res.status(429).json({ message: e.message });
+      }
+
+      return res.status(400).json({ message:"Email inesistente o problema nell'invio" }); 
+    }
   await VerificationCode.findOneAndUpdate({ schoolEmail }, { code, expiresAt }, { upsert:true });
   emailCooldown.set(schoolEmail, now);
   res.json({ message: "Codice inviato" });
@@ -90,7 +104,6 @@ router.post("/register/verify", postLimiterIP, async (req, res) => {
     }
   }
 
-  const hashed = await bcrypt.hash(password, 10);
   const existingUser = await User.findOne({ schoolEmail });
 
   if (existingUser && existingUser.active) 
@@ -99,7 +112,7 @@ router.post("/register/verify", postLimiterIP, async (req, res) => {
   if (existingUser && !existingUser.active) {
     await User.updateOne(
       { _id: existingUser._id },
-      { firstName, lastName, instagram: instagram || "", password: hashed, profileImage: validProfileImage, active: true }
+      { firstName, lastName, instagram: instagram || "", password: password, profileImage: validProfileImage, active: true }
     );
     await VerificationCode.deleteOne({ schoolEmail });
     failedAttempts.set(key, { count: 0, lock: 0 });
@@ -107,7 +120,7 @@ router.post("/register/verify", postLimiterIP, async (req, res) => {
     return res.status(201).json({ message: "Account riattivato", token });
   }
 
-  await User.create({ firstName, lastName, instagram: instagram || "", schoolEmail, password: hashed, profileImage: validProfileImage });
+  await User.create({ firstName, lastName, instagram: instagram || "", schoolEmail, password: password, profileImage: validProfileImage });
   await VerificationCode.deleteOne({ schoolEmail });
   failedAttempts.set(key, { count: 0, lock: 0 });
   const token = jwt.sign({ id: schoolEmail }, SECRET_KEY);

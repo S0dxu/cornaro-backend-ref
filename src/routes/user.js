@@ -1,5 +1,5 @@
 const express = require("express");
-const { verifyUser, postLimiterIP } = require("../middlewares/auth");
+const { verifyUser, postLimiterIP, getClientIp } = require("../middlewares/auth");
 const User = require("../models/User");
 const PasswordReset = require("../models/PasswordReset");
 const router = express.Router();
@@ -8,8 +8,13 @@ const bcrypt = require("bcrypt");
 const { sendEmailViaBridge } = require("../services/email");
 const crypto = require("crypto");
 
-function generateCode() {
-  return crypto.randomBytes(3).toString("hex").toUpperCase();
+function generateCode(){ const chars="0123456789"; let c=""; for(let i=0;i<6;i++) c+=chars[Math.floor(Math.random()*chars.length)]; return c; }
+
+function isValidSchoolEmail(email) {
+  if (typeof email !== "string") return false;
+  email = email.normalize("NFKC").replace(/[^\x00-\x7F]/g, "").toLowerCase().trim();
+  if (/[\r\n]/.test(email)) return false;
+  return /^[^@]+@studenti\.liceocornaro\.edu\.it$/.test(email);
 }
 
 router.post("/notifications", verifyUser, async (req, res) => {
@@ -59,8 +64,9 @@ router.post("/user/deactivate", verifyUser, async (req, res) => {
 });
 
 router.post("/password-reset/request", postLimiterIP, async (req, res) => {
-
+  const ip = getClientIp(req);
   const { schoolEmail } = req.body;
+  if(!isValidSchoolEmail(schoolEmail)) return res.status(400).json({ message: "Email non valida" });
 
   const user = await User.findOne({
     schoolEmail,
@@ -82,11 +88,19 @@ router.post("/password-reset/request", postLimiterIP, async (req, res) => {
     { upsert: true }
   );
 
-  await sendEmailViaBridge({
-    to: schoolEmail,
-    subject: "Reset password Cornaro",
-    html: `<h2>${code}</h2>`
-  });
+  try {
+    await sendEmailViaBridge({
+      to: schoolEmail,
+      subject: "Reset password Cornaro",
+      html: `<h2>${code}</h2>`,
+      ip
+    });
+  } catch(e) {
+    if (e.message && e.message.includes("IP")) {
+      return res.status(429).json({ message: e.message });
+    }
+    return res.status(400).json({ message: "Errore invio email" });
+  }
 
   res.json({
     message: "Codice inviato"
