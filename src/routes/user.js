@@ -109,9 +109,7 @@ router.post("/password-reset/request", postLimiterIP, async (req, res) => {
 });
 
 router.post("/password-reset/confirm", postLimiterIP, async (req, res) => {
-
   const { schoolEmail, code, newPassword } = req.body;
-
   const record = await PasswordReset.findOne({ schoolEmail });
 
   if (!record || record.code !== code) {
@@ -137,16 +135,22 @@ router.post("/password-reset/confirm", postLimiterIP, async (req, res) => {
     });
   }
 
+  const samePassword = await bcrypt.compare(newPassword, user.password);
+
+  if (samePassword) {
+    return res.status(400).json({
+      message: "La nuova password non può essere uguale alla precedente"
+    });
+  }
+
   user.password = newPassword;
 
   await user.save();
-
   await PasswordReset.deleteOne({ schoolEmail });
 
   res.json({
     message: "Password aggiornata"
   });
-
 });
 
 module.exports = router;
