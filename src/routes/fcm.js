@@ -17,7 +17,7 @@ router.post("/fcm/register", verifyUser, async (req, res) => {
 router.post("/fcm/check-new-messages", verifyAdmin, postLimiterUser, async (req, res) => {
   let sent = 0;
   const messages = await Message.find({ notified: false }).populate("chatId").limit(50);
-  const imgurRegex = /https:\/\/i\.imgur\.com\/\S+\.(?:png|jpg|jpeg|gif)/i;
+  const imgurRegex = /https:\/\/i\.ibb\.co\/\S+\.(?:png|jpg|jpeg|gif|webp)/i;
   await Promise.all(messages.map(async (msg) => {
     if (!msg.chatId) return;
     const chat = msg.chatId;

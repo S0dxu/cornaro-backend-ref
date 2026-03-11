@@ -11,7 +11,7 @@ const FcmToken = require("../models/FcmToken");
 const User = require("../models/User");
 const Book = require("../models/Book");
 const admin = require("firebase-admin");
-const IMGUR_REGEX = /https:\/\/i\.imgur\.com\/\S+\.(?:png|jpg|jpeg|gif)/i;
+const IMGUR_REGEX = /https:\/\/i\.ibb\.co\/\S+\.(?:png|jpg|jpeg|gif|webp)/i;
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage, limits:{ fileSize:2*1024*1024 } });
