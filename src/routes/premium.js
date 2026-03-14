@@ -1,9 +1,9 @@
 const express = require("express");
-const { verifyUser } = require("../middlewares/auth");
+const { postLimiterIP, postLimiterUser, verifyUser } = require("../middlewares/auth");
 const router = express.Router();
 const stripe = require("../config/stripe");
 
-router.get("/user/premium", verifyUser, (req, res) => {
+router.get("/user/premium", postLimiterIP, postLimiterUser, verifyUser, (req, res) => {
   const now = new Date();
 
   const isPremium =
@@ -17,7 +17,7 @@ router.get("/user/premium", verifyUser, (req, res) => {
   });
 });
 
-router.post("/premium/create-checkout", verifyUser, async (req, res) => {
+router.post("/premium/create-checkout", postLimiterIP, postLimiterUser, verifyUser, async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],

@@ -1,5 +1,5 @@
 const express = require("express");
-const { postLimiterUser, verifyUser, verifyAdmin } = require("../middlewares/auth");
+const { postLimiterIP, postLimiterUser, verifyUser, verifyAdmin } = require("../middlewares/auth");
 const FcmToken = require("../models/FcmToken");
 const router = express.Router();
 const Message = require("../models/Message");
@@ -7,14 +7,14 @@ const User = require("../models/User");
 const Info = require("../models/Info");
 const admin = require("firebase-admin");
 
-router.post("/fcm/register", verifyUser, async (req, res) => {
+router.post("/fcm/register", postLimiterIP, postLimiterUser, verifyUser, async (req, res) => {
   const { token } = req.body;
   if (!token) return res.status(400).json({ message: "Token FCM mancante" });
   await FcmToken.findOneAndUpdate({ token }, { schoolEmail: req.user.schoolEmail, updatedAt: new Date() }, { upsert: true });
   res.json({ message: "Token FCM salvato" });
 });
 
-router.post("/fcm/check-new-messages", verifyAdmin, postLimiterUser, async (req, res) => {
+router.post("/fcm/check-new-messages", postLimiterIP, postLimiterUser, verifyAdmin, async (req, res) => {
   let sent = 0;
   const messages = await Message.find({ notified: false }).populate("chatId").limit(50);
   const imgurRegex = /https:\/\/i\.ibb\.co\/\S+\.(?:png|jpg|jpeg|gif|webp)/i;
@@ -60,7 +60,7 @@ router.post("/fcm/check-new-messages", verifyAdmin, postLimiterUser, async (req,
   res.json({ checkedMessages: messages.length, checkedInfos: infos.length, notificationsSent: sent });
 });
 
-router.post("/user/notifications", verifyUser, async (req, res) => {
+router.post("/user/notifications", postLimiterIP, verifyUser, async (req, res) => {
   const { push, email } = req.body;
   if (push === undefined && email === undefined) return res.status(400).json({ message: "Nessun dato inviato" });
   const update = {};
@@ -70,7 +70,7 @@ router.post("/user/notifications", verifyUser, async (req, res) => {
   res.json({ message: "Preferenze aggiornate", notifications: update });
 });
 
-router.get("/user/notifications", verifyUser, async (req,res) => {
+router.get("/user/notifications", postLimiterIP, verifyUser, async (req,res) => {
   res.json(req.user.notifications);
 });
 

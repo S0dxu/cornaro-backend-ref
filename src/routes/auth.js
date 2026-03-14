@@ -151,7 +151,7 @@ router.post("/login", postLimiterIP, async (req,res)=>{
   });
 });
 
-router.post("/admin/clean-codes", verifyAdmin, async (req,res)=>{ 
+router.post("/admin/clean-codes", postLimiterIP, verifyAdmin, async (req,res)=>{ 
     const result = await VerificationCode.deleteMany({ expiresAt:{ $lt:new Date() } }); res.json({ eliminati:result.deletedCount }); 
 });
 

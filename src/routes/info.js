@@ -1,10 +1,10 @@
 const express = require("express");
-const { verifyAdmin } = require("../middlewares/auth");
+const { postLimiterIP, postLimiterUser, verifyAdmin } = require("../middlewares/auth");
 const Info = require("../models/Info");
 const router = express.Router();
 const { clearInfoCache } = require("../services/cache");
 
-router.post("/add-info", verifyAdmin, async (req,res)=>{
+router.post("/add-info", postLimiterIP, postLimiterUser, verifyAdmin, async (req,res)=>{
   const { title,message,type }=req.body;
   if(!title||!message) return res.status(400).json({ message:"Campi mancanti" });
   const info = await Info.create({ title,message,type:type||"info",createdBy:req.user.schoolEmail });
@@ -12,7 +12,7 @@ router.post("/add-info", verifyAdmin, async (req,res)=>{
   res.status(201).json({ message:"Avviso aggiunto", info });
 });
 
-router.post("/delete-info", verifyAdmin, async (req,res)=>{
+router.post("/delete-info", postLimiterIP, postLimiterUser, verifyAdmin, async (req,res)=>{
   const { id }=req.body;
   if(!id) return res.status(400).json({ message:"ID mancante" });
   const deleted=await Info.findByIdAndDelete(id);
@@ -21,7 +21,7 @@ router.post("/delete-info", verifyAdmin, async (req,res)=>{
   res.json({ message:"Post eliminato", deleted });
 });
 
-router.post("/update-info", verifyAdmin, async (req,res)=>{
+router.post("/update-info", postLimiterIP, postLimiterUser, verifyAdmin, async (req,res)=>{
   const { id, title, message, type } = req.body;
   if(!id||!title||!message||!type) return res.status(400).json({ message:"Campi mancanti" });
   const updated = await Info.findByIdAndUpdate(id,{ title,message,type },{ new:true });
@@ -30,7 +30,7 @@ router.post("/update-info", verifyAdmin, async (req,res)=>{
   res.json({ message:"Avviso aggiornato", info:updated });
 });
 
-router.get("/get-info", async (req,res)=>{
+router.get("/get-info", postLimiterIP, async (req,res)=>{
   let page=parseInt(req.query.page)||1;
   const limit=15;
   const skip=(page-1)*limit;

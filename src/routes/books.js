@@ -1,5 +1,5 @@
 const express = require("express");
-const { verifyUser, postLimiterUser } = require("../middlewares/auth");
+const { verifyUser, postLimiterUser, postLimiterIP } = require("../middlewares/auth");
 const Book = require("../models/Book");
 const User = require("../models/User");
 const { checkNudity } = require("../services/nsfw");
@@ -8,7 +8,7 @@ const { clearBookCache } = require("../services/cache");
 const CREDITS_ENABLED = false;
 const router = express.Router();
 
-router.get("/get-books", verifyUser, postLimiterUser, async (req, res) => {
+router.get("/get-books", verifyUser, postLimiterIP, postLimiterUser, async (req, res) => {
   try {
     const { condition, subject, grade, search, minPrice, maxPrice, page, limit, createdBy } = req.query;
     const currentPage = Math.max(parseInt(page) || 1, 1);
@@ -60,7 +60,7 @@ router.get("/get-books", verifyUser, postLimiterUser, async (req, res) => {
   }
 });
 
-router.post("/delete-book", verifyUser, postLimiterUser, async (req, res) => {
+router.post("/delete-book", verifyUser, postLimiterIP,postLimiterUser, async (req, res) => {
   try {
     const { bookId } = req.body;
 
@@ -87,7 +87,7 @@ router.post("/delete-book", verifyUser, postLimiterUser, async (req, res) => {
   }
 });
 
-router.get("/get-favorite-books", verifyUser, postLimiterUser, async (req, res) => {
+router.get("/get-favorite-books", verifyUser, postLimiterIP, postLimiterUser, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = 10;
@@ -131,7 +131,7 @@ router.get("/get-favorite-books", verifyUser, postLimiterUser, async (req, res) 
   }
 });
 
-router.post("/add-books", verifyUser, postLimiterUser, async (req, res) => {
+router.post("/add-books", verifyUser, postLimiterIP, postLimiterUser, async (req, res) => {
   const { title, condition, price, subject, grade, images, description, isbn } = req.body;
 
   if (
@@ -232,7 +232,7 @@ router.post("/add-books", verifyUser, postLimiterUser, async (req, res) => {
   }
 });
 
-router.post("/books/like", verifyUser, postLimiterUser, async (req, res) => {
+router.post("/books/like", verifyUser, postLimiterIP, postLimiterUser, async (req, res) => {
   const { bookId } = req.body;
   const userEmail = req.user.schoolEmail;
 

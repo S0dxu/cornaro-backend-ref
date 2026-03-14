@@ -16,7 +16,7 @@ const IMGUR_REGEX = /https:\/\/i\.ibb\.co\/\S+\.(?:png|jpg|jpeg|gif|webp)/i;
 const storage = multer.memoryStorage();
 const upload = multer({ storage, limits:{ fileSize:2*1024*1024 } });
 
-router.post("/chats/start", verifyUser, async (req, res) => {
+router.post("/chats/start",  postLimiterIP, postLimiterUser, verifyUser, async (req, res) => {
   const { sellerEmail, bookId } = req.body;
   if (!sellerEmail || !bookId) return res.status(400).json({ message: "Dati mancanti" });
   if (sellerEmail === req.user.schoolEmail) return res.status(400).json({ message: "Non puoi scrivere a te stesso" });
@@ -47,7 +47,7 @@ router.post("/chats/start", verifyUser, async (req, res) => {
   res.status(201).json({ message: "Chat creata", chatId: chat._id });
 });
 
-router.get("/chats", verifyUser, async (req, res) => {
+router.get("/chats",  postLimiterIP, postLimiterUser, verifyUser, async (req, res) => {
   const chats = await Chat.find({ $or: [ { seller: req.user.schoolEmail }, { buyer: req.user.schoolEmail } ] })
     .sort({ updatedAt: -1 }).populate('bookId', 'title images price').lean();
   const mappedChats = chats.map(chat => {
@@ -59,7 +59,7 @@ router.get("/chats", verifyUser, async (req, res) => {
   res.json(mappedChats);
 });
 
-router.get("/chats/:chatId/messages", verifyUser, verifyChatAccess, async (req, res) => {
+router.get("/chats/:chatId/messages", verifyUser, postLimiterIP, postLimiterUser, verifyChatAccess, async (req, res) => {
   const { limit = 20, skip = 0 } = req.query;
   if (req.chat.lastMessage && req.chat.lastMessage.sender !== req.user.schoolEmail && req.chat.lastMessage.seen === false) {
     await Chat.updateOne({ _id: req.chat._id }, { $set: { "lastMessage.seen": true } });
@@ -75,7 +75,7 @@ router.get("/chats/:chatId/messages", verifyUser, verifyChatAccess, async (req, 
   res.json(mapped.reverse());
 });
 
-router.post("/chats/:chatId/messages", verifyUser, postLimiterUser, verifyChatAccess, async (req, res) => {
+router.post("/chats/:chatId/messages", verifyUser, postLimiterIP, postLimiterUser, verifyChatAccess, async (req, res) => {
   const { text } = req.body;
   if (!text) return res.status(400).json({ message: "Testo mancante" });
 
@@ -158,7 +158,7 @@ router.post("/chats/:chatId/messages", verifyUser, postLimiterUser, verifyChatAc
   res.status(201).json(msg);
 });
 
-router.post("/upload-imgur", upload.single("image"), async (req, res) => {
+router.post("/upload-imgur", postLimiterIP, upload.single("image"), async (req, res) => {
   if (!req.file)
     return res.status(400).json({ message: "File mancante" });
 

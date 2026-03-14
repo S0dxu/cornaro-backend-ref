@@ -1,5 +1,5 @@
 const express = require("express");
-const { verifyUser, postLimiterIP, getClientIp } = require("../middlewares/auth");
+const { verifyUser, postLimiterIP, postLimiterUser, getClientIp } = require("../middlewares/auth");
 const User = require("../models/User");
 const PasswordReset = require("../models/PasswordReset");
 const router = express.Router();
@@ -17,7 +17,7 @@ function isValidSchoolEmail(email) {
   return /^[^@]+@studenti\.liceocornaro\.edu\.it$/.test(email);
 }
 
-router.post("/notifications", verifyUser, async (req, res) => {
+router.post("/notifications", postLimiterIP, postLimiterUser,verifyUser, async (req, res) => {
   const { push, email } = req.body;
   if (push === undefined && email === undefined)
     return res.status(400).json({ message: "Nessun dato inviato" });
@@ -28,7 +28,7 @@ router.post("/notifications", verifyUser, async (req, res) => {
   res.json({ message: "Preferenze aggiornate", updated: update });
 });
 
-router.get("/profile/:email", verifyUser, async (req, res) => {
+router.get("/profile/:email", postLimiterIP, postLimiterUser, verifyUser, async (req, res) => {
   const email = req.params.email;
   const user = await User.findOne(
     { schoolEmail: email, active: true },
@@ -45,11 +45,11 @@ router.get("/profile/:email", verifyUser, async (req, res) => {
   });
 });
 
-router.get("/is-admin", verifyUser, async (req,res)=> res.json({ 
+router.get("/is-admin", postLimiterIP, postLimiterUser, verifyUser, async (req,res)=> res.json({ 
     isAdmin:req.user.isAdmin
 }));
 
-router.post("/user/deactivate", verifyUser, async (req, res) => {
+router.post("/user/deactivate", postLimiterIP, postLimiterUser, verifyUser, async (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ message: "Password richiesta" });
 
