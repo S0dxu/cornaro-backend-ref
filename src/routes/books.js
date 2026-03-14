@@ -184,7 +184,7 @@ router.post("/add-books", verifyUser, postLimiterUser, async (req, res) => {
         updatedUser = await User.findOneAndUpdate(
           { _id: req.user._id, credits: { $gte: 10 } },
           { $inc: { credits: -10 } },
-          { session, new: true }
+          { session, returnDocument: "after" }
         );
 
         if (!updatedUser) throw new Error("Crediti insufficienti");
@@ -243,32 +243,32 @@ router.post("/books/like", verifyUser, postLimiterUser, async (req, res) => {
   }
 
   try {
-    const liked = await Book.findOneAndUpdate(
-      { _id: bookId, likedBy: { $ne: userEmail } },
-      { $addToSet: { likedBy: userEmail }, $inc: { likes: 1 } },
-      { new: true, useFindAndModify: false }
-    );
+    const book = await Book.findById(bookId).select("likedBy likes");
 
-    if (liked) {
-      liked.likes = liked.likes || 0;
-      clearBookCache();
-      return res.json({ liked: true, likes: liked.likes });
+    if (!book) {
+      return res.status(404).json({ message: "Libro non trovato" });
     }
 
-    const unliked = await Book.findOneAndUpdate(
-      { _id: bookId, likedBy: userEmail },
-      { $pull: { likedBy: userEmail }, $inc: { likes: -1 } },
-      { new: true, useFindAndModify: false }
+    const hasLiked = book.likedBy.includes(userEmail);
+
+    const update = hasLiked
+      ? { $pull: { likedBy: userEmail }, $inc: { likes: -1 } }
+      : { $addToSet: { likedBy: userEmail }, $inc: { likes: 1 } };
+
+    const updated = await Book.findByIdAndUpdate(
+      bookId,
+      update,
+      { returnDocument: "after", projection: { likes: 1 } }
     );
 
-    if (!unliked) return res.status(404).json({ message: "Libro non trovato" });
-
-    unliked.likes = unliked.likes || 0;
     clearBookCache();
-    return res.json({ liked: false, likes: unliked.likes });
 
-  } catch (e) {
-    console.error("Errore like:", e);
+    res.json({
+      liked: !hasLiked,
+      likes: updated.likes || 0
+    });
+
+  } catch {
     res.status(500).json({ message: "Errore server durante il like" });
   }
 });

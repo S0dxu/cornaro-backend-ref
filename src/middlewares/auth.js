@@ -4,6 +4,8 @@ const Chat = require("../models/Chat");
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = require("express-rate-limit");
 const { SECRET_KEY } = require("../config/env");
+const { RedisStore } = require("rate-limit-redis");
+const redis = require("../config/redis");
 
 async function verifyUser(req, res, next) {
   const token = req.headers["authorization"]?.split(" ")[1];
@@ -59,20 +61,23 @@ function verifyAdmin(req, res, next) {
 
 const postLimiterIP = rateLimit({
   windowMs: 1000,
-  max: 2,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: ipKeyGenerator,
   handler: (req, res) => {
-    res.status(429).json({ message: "Limite richieste superato, riprova tra 1 secondo" });
+    res.status(429).json({ message: "Troppi richieste, riprova tra 1 secondo" });
   }
 });
 
 const postLimiterUser = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  keyGenerator: ipKeyGenerator,
-  message: { message: "Troppi richieste, riprova più tardi" },
+  store: new RedisStore({
+    sendCommand: (...args) => redis.sendCommand(args),
+  }),
+  windowMs: 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false
 });
 
 function getClientIp(req) {

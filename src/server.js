@@ -5,7 +5,7 @@ const cors = require("cors");
 const { PORT, MONGO_URI } = require("./config/env");
 
 const app = express();
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
 
 mongoose.connect(MONGO_URI)
   .then(() => console.log("MongoDB connected"))
