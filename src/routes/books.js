@@ -243,29 +243,38 @@ router.post("/books/like", verifyUser, postLimiterIP, postLimiterUser, async (re
   }
 
   try {
-    const liked = await Book.findOneAndUpdate(
+    const bookExists = await Book.findById(bookId).select("_id");
+    if (!bookExists) {
+      return res.status(404).json({ message: "Libro non trovato" });
+    }
+
+    let liked = await Book.findOneAndUpdate(
       { _id: bookId, likedBy: { $ne: userEmail } },
       { $addToSet: { likedBy: userEmail }, $inc: { likes: 1 } },
       { returnDocument: "after" }
     );
 
     if (liked) {
-      liked.likes = liked.likes || 0;
       clearBookCache();
-      return res.json({ liked: true, likes: liked.likes });
+      return res.json({ liked: true, likes: liked.likes || 0 });
     }
 
-    const unliked = await Book.findOneAndUpdate(
+    let unliked = await Book.findOneAndUpdate(
       { _id: bookId, likedBy: userEmail },
       { $pull: { likedBy: userEmail }, $inc: { likes: -1 } },
       { returnDocument: "after" }
     );
 
-    if (!unliked) return res.status(404).json({ message: "Libro non trovato" });
+    if (!unliked) {
+      const currentBook = await Book.findById(bookId).select("likes likedBy");
+      return res.json({
+        liked: currentBook.likedBy.includes(userEmail),
+        likes: currentBook.likes || 0
+      });
+    }
 
-    unliked.likes = unliked.likes || 0;
     clearBookCache();
-    return res.json({ liked: false, likes: unliked.likes });
+    return res.json({ liked: false, likes: unliked.likes || 0 });
 
   } catch (e) {
     console.error("Errore like:", e);

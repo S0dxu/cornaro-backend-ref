@@ -47,16 +47,72 @@ router.post("/chats/start",  postLimiterIP, postLimiterUser, verifyUser, async (
   res.status(201).json({ message: "Chat creata", chatId: chat._id });
 });
 
-router.get("/chats",  postLimiterIP, postLimiterUser, verifyUser, async (req, res) => {
-  const chats = await Chat.find({ $or: [ { seller: req.user.schoolEmail }, { buyer: req.user.schoolEmail } ] })
-    .sort({ updatedAt: -1 }).populate('bookId', 'title images price').lean();
-  const mappedChats = chats.map(chat => {
-    const me = req.user.schoolEmail;
-    const other = chat.seller === me ? chat.buyer : chat.seller;
-    const bookInfo = chat.bookId ? { title: chat.bookId.title, image: chat.bookId.images[0] || null, price: chat.bookId.price } : null;
-    return { _id: chat._id, me, other, lastMessage: chat.lastMessage ? { ...chat.lastMessage, text: decrypt(chat.lastMessage.text) } : null, updatedAt: chat.updatedAt, book: bookInfo };
-  });
-  res.json(mappedChats);
+router.get("/chats", postLimiterIP, postLimiterUser, verifyUser, async (req, res) => {
+  const me = req.user.schoolEmail;
+
+  try {
+    const chats = await Chat.aggregate([
+      { $match: { $or: [{ seller: me }, { buyer: me }] } },
+      { $sort: { updatedAt: -1 } },
+      {
+        $lookup: {
+          from: "books",
+          localField: "bookId",
+          foreignField: "_id",
+          as: "bookInfo"
+        }
+      },
+      { $unwind: { path: "$bookInfo", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          otherEmail: { $cond: [{ $eq: ["$seller", me] }, "$buyer", "$seller"] }
+        }
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "otherEmail",
+          foreignField: "schoolEmail",
+          as: "otherDetails"
+        }
+      },
+      { $unwind: { path: "$otherDetails", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 1,
+          updatedAt: 1,
+          lastMessage: 1,
+          me: { $literal: me },
+          other: "$otherEmail",
+          otherUser: {
+            firstName: "$otherDetails.firstName",
+            lastName: "$otherDetails.lastName",
+            profileImage: "$otherDetails.profileImage"
+          },
+          book: {
+            title: "$bookInfo.title",
+            image: { $arrayElemAt: ["$bookInfo.images", 0] },
+            price: "$bookInfo.price"
+          }
+        }
+      }
+    ]);
+
+    const mapped = chats.map(chat => {
+      if (chat.lastMessage) {
+        chat.lastMessage.text = decrypt(chat.lastMessage.text);
+      }
+      if (chat.otherUser) {
+        chat.otherUser.firstName = decrypt(chat.otherUser.firstName);
+        chat.otherUser.lastName = decrypt(chat.otherUser.lastName);
+      }
+      return chat;
+    });
+
+    res.json(mapped);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 router.get("/chats/:chatId/messages", verifyUser, postLimiterIP, postLimiterUser, verifyChatAccess, async (req, res) => {
