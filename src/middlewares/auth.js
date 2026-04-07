@@ -61,7 +61,7 @@ function verifyAdmin(req, res, next) {
 
 const postLimiterIP = rateLimit({
   windowMs: 1000,
-  max: 10,
+  max: 100000,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: ipKeyGenerator,
@@ -75,7 +75,7 @@ const postLimiterUser = rateLimit({
     sendCommand: (...args) => redis.sendCommand(args),
   }),
   windowMs: 1000,
-  max: 10,
+  max: 100000,
   standardHeaders: true,
   legacyHeaders: false
 });
